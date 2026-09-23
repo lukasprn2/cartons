@@ -55,6 +55,7 @@ th,td{text-align:left;padding:7px 6px;border-top:1px solid var(--bd);vertical-al
 <body>
 <header>
   <h1 id="ttl">Cartons Pétanque<small id="sub"></small></h1>
+  <button id="bCode">☁</button>
   <button id="bStart" class="pri">▶ Commencer le concours</button>
   <button id="bEnd" class="dan">■ Terminer / Récapitulatif</button>
 </header>
@@ -62,6 +63,8 @@ th,td{text-align:left;padding:7px 6px;border-top:1px solid var(--bd);vertical-al
 <main id="main"></main>
 <div id="modal" class="modal hide"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 const KEY="cartons_petanque_v1";
 const REASONS=["Cigarette / vapoteuse","Téléphone","Pied qui mord le cercle","Pied hors du cercle","Retard","Temps de jeu dépassé","Comportement antisportif","Insultes / langage","Contestation de l'arbitre","Alcool","Boules non conformes","Jeu dangereux","Autre"];
@@ -71,7 +74,45 @@ let tab="concours",q="";
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Sauvegarde impossible sur ce navigateur. Pensez à exporter la sauvegarde.")}}
+const FIREBASE_CONFIG={apiKey:"AIzaSyAqBObvy03KeZWZxDjRVd-GmDHUmAKMQws",authDomain:"cartons-19847.firebaseapp.com",projectId:"cartons-19847",storageBucket:"cartons-19847.firebasestorage.app",messagingSenderId:"179473290623",appId:"1:179473290623:web:321ce823ae8e22d63a764a"};
+const CKEY="cartons_code";let CODE="",ref=null,unsub=null,sync="local",tmr=null;
+try{CODE=localStorage.getItem(CKEY)||""}catch(e){}
+const fresh=()=>({info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[]});
+function local(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Sauvegarde impossible sur ce navigateur. Pensez à exporter la sauvegarde.")}}
+function save(){S.rev=Date.now();local();push()}
+function push(){if(!ref)return;clearTimeout(tmr);tmr=setTimeout(()=>ref.set({json:JSON.stringify(S)}).catch(()=>{sync="err";head()}),500)}
+function connect(){
+  if(unsub){unsub();unsub=null}ref=null;
+  if(!CODE||typeof firebase==="undefined"){sync="local";head();return}
+  try{
+    if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
+    ref=firebase.firestore().collection("concours").doc(CODE);sync="wait";
+    unsub=ref.onSnapshot(s=>{
+      sync="ok";
+      if(s.metadata.hasPendingWrites){head();return}
+      if(!s.exists){push();head();return}
+      let d;try{d=JSON.parse(s.data().json)}catch(e){return}
+      if((d.rev||0)>(S.rev||0)){S=d;local();render()}
+      else if((d.rev||0)<(S.rev||0))push();
+      head();
+    },()=>{sync="err";head()});
+  }catch(e){sync="err";head()}
+}
+function askCode(){
+  modal(`<h3>Code du concours</h3><p class="mu">Tous les appareils qui utilisent le même code partagent les mêmes données en temps réel. Choisissez un code long (8 caractères minimum, lettres, chiffres, - ou _) et gardez-le secret.</p><input id="cd" value="${esc(CODE)}" autocapitalize="off" autocomplete="off"><div class="row" style="margin-top:14px"><button class="pri" id="ok">Valider</button><button id="no">Plus tard (mode local)</button></div>`);
+  $("no").onclick=close;
+  $("ok").onclick=()=>{
+    const v=$("cd").value.trim();
+    if(!/^[A-Za-z0-9_-]{8,}$/.test(v))return alert("8 caractères minimum : lettres, chiffres, - ou _ uniquement.");
+    if(v!==CODE){
+      if(CODE){if(!confirm("Changer de code remplace les données de cet appareil par celles du nouveau code. Continuer ?"))return;S=fresh()}
+      CODE=v;try{localStorage.setItem(CKEY,v)}catch(e){}
+      local();connect();
+    }
+    close();render();
+  };
+}
+$("bCode").onclick=askCode;
 const tm=id=>S.teams.find(t=>t.id===id);
 const cnt=(f)=>({Y:S.cards.filter(c=>c.col==="Y"&&f(c)).length,O:S.cards.filter(c=>c.col==="O"&&f(c)).length,R:S.cards.filter(c=>c.col==="R"&&f(c)).length});
 const dots=c=>["Y","O","R"].filter(k=>c[k]).map(k=>`<span class="dot ${COL[k][1]}">${c[k]}</span>`).join("");
@@ -79,6 +120,7 @@ const fmt=t=>t?new Date(t).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit"
 const who=c=>{const t=tm(c.team);if(!t)return"?";const p=c.p>=0?t.players[c.p]||"Joueur "+(c.p+1):"Toute l'équipe";return`#${t.num} ${t.name||""} — ${p}`};
 
 function head(){
+  $("bCode").textContent=sync==="ok"?"☁ Synchronisé":sync==="err"?"⚠ Synchro impossible":sync==="wait"?"☁ Connexion…":"☁ Définir le code";
   $("ttl").firstChild.textContent=S.info.nom||"Cartons Pétanque";
   $("sub").textContent=[S.info.date,S.info.lieu].filter(Boolean).join(" · ")+(S.state==="run"?" · EN COURS":S.state==="done"?" · TERMINÉ":"");
   $("bStart").classList.toggle("hide",S.state==="run");
@@ -151,7 +193,7 @@ function bind(){
   if($("exp"))$("exp").onclick=()=>{$("bk").classList.remove("hide");$("bk").value=JSON.stringify(S);$("bk").select()};
   if($("imp"))$("imp").onclick=()=>{const b=$("bk");if(b.classList.contains("hide")){b.classList.remove("hide");b.value="";return}
     try{const d=JSON.parse(b.value);if(!d.teams)throw 0;if(confirm("Remplacer toutes les données actuelles ?")){S=d;save();render()}}catch(e){alert("Sauvegarde invalide.")}};
-  if($("rst"))$("rst").onclick=()=>{if(confirm("Effacer TOUTES les données (équipes, cartons, infos) ?")&&confirm("Vraiment ? C'est définitif.")){localStorage.removeItem(KEY);location.reload()}};
+  if($("rst"))$("rst").onclick=()=>{if(confirm("Effacer TOUTES les données (équipes, cartons, infos) ?")&&confirm("Vraiment ? C'est définitif.")){S=fresh();save();tab="concours";render()}};
 }
 function newTeam(name,pl){const num=S.teams.reduce((m,t)=>Math.max(m,t.num),0)+1;return{id:"t"+Date.now().toString(36)+num,num,name:name||"",players:[pl[0]||"",pl[1]||"",pl[2]||""]}}
 
@@ -188,7 +230,8 @@ function cardForm(id){const t=tm(id);let p=-1,col=null,why=null;
     S.cards.push({id:"c"+Date.now().toString(36),team:id,p,col,why:w,note:$("nt").value.trim(),t:Date.now()});
     save();close();q="";render()};
 }
-render();
+connect();render();
+if(!CODE)askCode();
 </script>
 </body>
 </html>
