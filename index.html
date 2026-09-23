@@ -81,7 +81,7 @@ th,td{text-align:left;padding:9px 6px;border-top:1px solid var(--bd);vertical-al
 const KEY="cartons_petanque_v1";
 const REASONS=["Cigarette / vapoteuse","Téléphone","Pied qui mord le cercle","Pied hors du cercle","Retard","Temps de jeu dépassé","Comportement antisportif","Insultes / langage","Contestation de l'arbitre","Alcool","Boules non conformes","Jeu dangereux","Autre"];
 const COL={Y:["Jaune","dY","cY"],O:["Orange","dO","cO"],R:["Rouge","dR","cR"]};
-let S={info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[]};
+let S={info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[],partie:1};
 let tab="concours",q="";
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 const $=id=>document.getElementById(id);
@@ -89,7 +89,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const FIREBASE_CONFIG={apiKey:"AIzaSyAqBObvy03KeZWZxDjRVd-GmDHUmAKMQws",authDomain:"cartons-19847.firebaseapp.com",projectId:"cartons-19847",storageBucket:"cartons-19847.firebasestorage.app",messagingSenderId:"179473290623",appId:"1:179473290623:web:321ce823ae8e22d63a764a"};
 const CKEY="cartons_code";let CODE="",ref=null,unsub=null,sync="local",tmr=null;
 try{CODE=localStorage.getItem(CKEY)||""}catch(e){}
-const fresh=()=>({info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[]});
+const fresh=()=>({info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[],partie:1});
 function local(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Sauvegarde impossible sur ce navigateur. Pensez à exporter la sauvegarde.")}}
 function save(){S.rev=Date.now();local();push()}
 function push(){if(!ref)return;clearTimeout(tmr);tmr=setTimeout(()=>ref.set({json:JSON.stringify(S)}).catch(()=>{sync="err";head()}),500)}
@@ -126,6 +126,9 @@ function askCode(){
 }
 $("bCode").onclick=askCode;
 const tm=id=>S.teams.find(t=>t.id===id);
+if(!S.partie)S.partie=1;
+const active=c=>c.col==="R"||(c.partie||1)===S.partie;
+const isDisq=id=>S.cards.some(c=>c.team===id&&c.col==="R");
 const cnt=(f)=>({Y:S.cards.filter(c=>c.col==="Y"&&f(c)).length,O:S.cards.filter(c=>c.col==="O"&&f(c)).length,R:S.cards.filter(c=>c.col==="R"&&f(c)).length});
 const dots=c=>["Y","O","R"].filter(k=>c[k]).map(k=>`<span class="dot ${COL[k][1]}">${c[k]}</span>`).join("");
 const fmt=t=>t?new Date(t).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
@@ -135,7 +138,7 @@ const who=c=>{const t=tm(c.team);if(!t)return"?";const p=c.p>=0?pl(t,c.p):"Toute
 function head(){
   $("bCode").textContent=sync==="ok"?"☁ Synchronisé":sync==="err"?"⚠ Synchro impossible":sync==="wait"?"☁ Connexion…":"☁ Définir le code";
   $("ttl").firstChild.textContent=S.info.nom||"Cartons Pétanque";
-  $("sub").textContent=[S.info.date,S.info.lieu].filter(Boolean).join(" · ")+(S.state==="run"?" · EN COURS":S.state==="done"?" · TERMINÉ":"");
+  $("sub").textContent=[S.info.date,S.info.lieu].filter(Boolean).join(" · ")+(S.state==="run"?` · EN COURS · Partie ${S.partie}`:S.state==="done"?" · TERMINÉ":"");
   $("bStart").classList.toggle("hide",S.state==="run");
   $("bStart").textContent=S.state==="done"?"↺ Rouvrir le concours":"▶ Commencer le concours";
   $("bEnd").classList.toggle("hide",S.state!=="run");
@@ -169,7 +172,7 @@ function vTeams(){
   <textarea id="bulk" rows="4" placeholder="Les Boulistes; Paul; Marc; Luc"></textarea>
   <div class="row" style="margin-top:8px"><button class="pri" id="addB">Ajouter</button><button id="gen">Créer équipes vides 1 à 128</button></div></div>
   <div class="box"><input id="q" placeholder="Rechercher (n°, équipe, joueur)" value="${esc(q)}"><div style="margin-top:6px">${
-  l.slice(0,60).map(t=>`<div class="tm" data-e="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)||'<i class="mu">sans nom</i>'}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><span>✎</span></div>`).join("")||'<p class="mu">Aucune équipe.</p>'}
+  l.slice(0,60).map(t=>`<div class="tm" data-e="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)||'<i class="mu">sans nom</i>'}${isDisq(t.id)?' <span class="tag" style="background:var(--r);color:#fff">🚫 Disqualifiée</span>':""}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><span>✎</span></div>`).join("")||'<p class="mu">Aucune équipe.</p>'}
   ${l.length>60?`<p class="mu">${l.length-60} autres… affinez la recherche.</p>`:""}</div></div>`}
 
 const match=(t,s)=>!s||(`${t.num} ${t.name} ${t.players.join(" ")}`).toLowerCase().includes(s.toLowerCase());
@@ -177,20 +180,27 @@ const match=(t,s)=>!s||(`${t.num} ${t.name} ${t.players.join(" ")}`).toLowerCase
 function vCards(){
   if(S.state!=="run")return`<div class="box"><p>${S.state==="done"?"Le concours est terminé. Rouvrez-le pour ajouter des cartons.":"Cliquez sur « Commencer le concours » pour donner des cartons."}</p></div>`;
   const l=S.teams.filter(t=>match(t,q));
-  return`<div class="box"><input id="q" placeholder="Chercher l'équipe ou le joueur (n°, nom)…" value="${esc(q)}" autofocus><div style="margin-top:6px">${
-  l.slice(0,25).map(t=>`<div class="tm" data-c="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><div>${dots(cnt(c=>c.team===t.id))}</div></div>`).join("")||'<p class="mu">Aucune équipe trouvée.</p>'}</div></div>
+  return`<div class="box row" style="justify-content:space-between;align-items:center">
+  <div><b>Partie ${S.partie}</b><div class="mu">🟨/🟧 valables pour cette partie uniquement · 🟥 disqualifie pour tout le concours</div></div>
+  <button id="nextP">Partie suivante ▶</button></div>
+  <div class="box"><input id="q" placeholder="Chercher l'équipe ou le joueur (n°, nom)…" value="${esc(q)}" autofocus><div style="margin-top:6px">${
+  l.slice(0,25).map(t=>`<div class="tm" data-c="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)}${isDisq(t.id)?' <span class="tag" style="background:var(--r);color:#fff">🚫 Disqualifiée</span>':""}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><div>${dots(cnt(c=>c.team===t.id&&active(c)))}</div></div>`).join("")||'<p class="mu">Aucune équipe trouvée.</p>'}</div></div>
   <div class="box"><b>Derniers cartons</b>${list(S.cards.slice(-5).reverse())}</div>`}
 
-function list(a,del=true){return a.length?`<div class="scroll"><table>${a.map(c=>`<tr><td><span class="dot ${COL[c.col][1]}">${COL[c.col][0][0]}</span></td><td>${esc(who(c))}<div class="mu">${esc(c.why)}${c.note?" — "+esc(c.note):""}</div></td><td class="mu">${fmt(c.t)}</td>${del&&S.state!=="done"?`<td><button data-d="${c.id}">✕</button></td>`:""}</tr>`).join("")}</table></div>`:'<p class="mu">Aucun carton.</p>'}
+function list(a,del=true){return a.length?`<div class="scroll"><table>${a.map(c=>`<tr><td><span class="dot ${COL[c.col][1]}">${COL[c.col][0][0]}</span></td><td>${esc(who(c))}<div class="mu">${esc(c.why)}${c.note?" — "+esc(c.note):""} · ${c.col==="R"?"DISQUALIFICATION":"Partie "+(c.partie||1)}</div></td><td class="mu">${fmt(c.t)}</td>${del&&S.state!=="done"?`<td><button data-d="${c.id}">✕</button></td>`:""}</tr>`).join("")}</table></div>`:'<p class="mu">Aucun carton.</p>'}
 
 function vRecap(){
   const c=cnt(()=>true);const st=k=>`<div class="stat ${COL[k][2]}"><span>${c[k]}</span>${COL[k][0]}</div>`;
   const ts=S.teams.filter(t=>S.cards.some(x=>x.team===t.id));
+  const disq=S.teams.filter(t=>isDisq(t.id));
   const rs={};S.cards.forEach(x=>rs[x.why]=(rs[x.why]||0)+1);
-  return`<div class="box"><h3>${esc(S.info.nom||"Concours")}</h3><p class="mu">${[S.info.date,S.info.lieu,S.info.type,S.info.arbitre&&"Arbitre : "+S.info.arbitre].filter(Boolean).map(esc).join(" · ")}<br>Début : ${fmt(S.start)||"—"} · Fin : ${fmt(S.end)||"en cours"}</p>
+  const parties=[...new Set(S.cards.map(x=>x.partie||1))].sort((a,b)=>a-b);
+  return`<div class="box"><h3>${esc(S.info.nom||"Concours")}</h3><p class="mu">${[S.info.date,S.info.lieu,S.info.type,S.info.arbitre&&"Arbitre : "+S.info.arbitre].filter(Boolean).map(esc).join(" · ")}<br>Début : ${fmt(S.start)||"—"} · Fin : ${fmt(S.end)||"en cours"} · ${S.partie} partie(s) jouée(s)</p>
   <div class="cols">${st("Y")}${st("O")}${st("R")}</div><p><b>${S.cards.length}</b> carton(s) · <b>${ts.length}</b> équipe(s) sanctionnée(s) sur ${S.teams.length}</p></div>
+  <div class="box"><b>Équipes disqualifiées (carton rouge)</b><p>${disq.length?disq.map(t=>`<span class="tag" style="background:var(--r);color:#fff">#${t.num} ${esc(t.name)}</span>`).join(" "):'<span class="mu">Aucune</span>'}</p></div>
+  <div class="box"><b>Par partie</b><p class="mu">🟨/🟧 comptés uniquement sur la partie où ils ont été donnés · 🟥 compté une fois, quelle que soit la partie</p><div class="scroll"><table><tr><th>Partie</th><th>🟨</th><th>🟧</th><th>🟥</th></tr>${parties.map(pn=>{const cc=cnt(x=>(x.partie||1)===pn);return`<tr><td>${pn}</td><td>${cc.Y}</td><td>${cc.O}</td><td>${cc.R}</td></tr>`}).join("")||'<tr><td colspan="4" class="mu">Aucun carton.</td></tr>'}</table></div></div>
   <div class="box"><b>Par motif</b><p>${Object.entries(rs).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="tag">${esc(k)} : ${v}</span> `).join("")||'<span class="mu">—</span>'}</p></div>
-  <div class="box"><b>Par équipe</b><div class="scroll"><table>${ts.map(t=>{const cc=cnt(x=>x.team===t.id);return`<tr><td><b>#${t.num}</b> ${esc(t.name)}</td><td>${dots(cc)}</td></tr><tr><td colspan="2" class="mu">${S.cards.filter(x=>x.team===t.id).map(x=>`${COL[x.col][0]} — ${esc(x.p>=0?pl(t,x.p):"équipe")} — ${esc(x.why)}`).join("<br>")}</td></tr>`}).join("")||"<tr><td>Aucun carton.</td></tr>"}</table></div></div>
+  <div class="box"><b>Par équipe</b><div class="scroll"><table>${ts.map(t=>{const cc=cnt(x=>x.team===t.id);return`<tr><td><b>#${t.num}</b> ${esc(t.name)}${isDisq(t.id)?' 🚫':""}</td><td>${dots(cc)}</td></tr><tr><td colspan="2" class="mu">${S.cards.filter(x=>x.team===t.id).map(x=>`${COL[x.col][0]} — ${esc(x.p>=0?pl(t,x.p):"équipe")} — ${esc(x.why)} — ${x.col==="R"?"DISQUALIFICATION":"Partie "+(x.partie||1)}`).join("<br>")}</td></tr>`}).join("")||"<tr><td>Aucun carton.</td></tr>"}</table></div></div>
   <div class="box"><b>Chronologie</b>${list(S.cards.slice().reverse(),false)}</div>
   <div class="noprint row"><button class="pri" onclick="print()">🖨 Imprimer / PDF</button></div>`}
 
@@ -207,6 +217,7 @@ function bind(){
   if($("imp"))$("imp").onclick=()=>{const b=$("bk");if(b.classList.contains("hide")){b.classList.remove("hide");b.value="";return}
     try{const d=JSON.parse(b.value);if(!d.teams)throw 0;if(confirm("Remplacer toutes les données actuelles ?")){S=d;save();render()}}catch(e){alert("Sauvegarde invalide.")}};
   if($("rst"))$("rst").onclick=()=>{if(confirm("Effacer TOUTES les données (équipes, cartons, infos) ?")&&confirm("Vraiment ? C'est définitif.")){S=fresh();save();tab="concours";render()}};
+  if($("nextP"))$("nextP").onclick=()=>{if(confirm(`Passer à la partie ${S.partie+1} ?\n\nLes cartons jaunes/orange affichés seront remis à zéro pour cette nouvelle partie (l'historique est conservé dans le récap). Les cartons rouges restent actifs pour tout le concours.`)){S.partie++;save();render()}};
 }
 function newTeam(name,pl){const num=S.teams.reduce((m,t)=>Math.max(m,t.num),0)+1;return{id:"t"+Date.now().toString(36)+num,num,name:name||"",players:[pl[0]||"",pl[1]||"",pl[2]||""]}}
 
@@ -223,7 +234,8 @@ function editTeam(id){const t=tm(id);
 
 function cardForm(id){const t=tm(id);let p=-1,col=null,why=null;
   const prev=S.cards.filter(c=>c.team===id);
-  modal(`<h3>#${t.num} ${esc(t.name)}</h3>
+  modal(`<h3>#${t.num} ${esc(t.name)} <span class="mu">· Partie ${S.partie}</span></h3>
+  ${isDisq(id)?'<p style="color:var(--r);font-weight:700">⚠ Cette équipe est déjà disqualifiée (carton rouge reçu précédemment).</p>':""}
   <label>Qui reçoit le carton ?</label><div class="chips" id="pl">${[...t.players.map((n,i)=>[i,pl(t,i)]),[-1,"Toute l'équipe"]].map(([i,n])=>`<button data-p="${i}" class="${i===-1?"on":""}">${esc(n)}</button>`).join("")}</div>
   <div id="pnw" class="hide"><label>Nom ou signalement du joueur (facultatif, retenu pour la suite)</label><input id="pn" placeholder="ex : casquette rouge, grand, polo bleu"></div>
   <label>Couleur</label><div class="cols" id="co">${["Y","O","R"].map(k=>`<button class="${COL[k][2]}" data-k="${k}">${COL[k][0]}</button>`).join("")}</div>
@@ -242,7 +254,7 @@ function cardForm(id){const t=tm(id);let p=-1,col=null,why=null;
     if(!why)return alert("Choisissez le motif.");
     let w=why;if(why==="Autre"){w=$("oth").value.trim();if(!w)return alert("Précisez le motif.")}
     if(p>=0){const v=$("pn").value.trim();if(v!==(t.players[p]||""))t.players[p]=v}
-    S.cards.push({id:"c"+Date.now().toString(36),team:id,p,col,why:w,note:$("nt").value.trim(),t:Date.now()});
+    S.cards.push({id:"c"+Date.now().toString(36),team:id,p,col,why:w,note:$("nt").value.trim(),t:Date.now(),partie:S.partie});
     save();close();q="";render()};
 }
 connect();render();
