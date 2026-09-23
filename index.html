@@ -84,12 +84,12 @@ th,td{text-align:left;padding:9px 6px;border-top:1px solid var(--bd);vertical-al
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 const KEY="cartons_petanque_v1";
-const REASONS=["Cigarette / vapoteuse","Téléphone","Pied qui mord le cercle","Pied hors du cercle","Retard","Temps de jeu dépassé","Comportement antisportif","Insultes / langage","Contestation de l'arbitre","Alcool","Boules non conformes","Jeu dangereux","Autre"];
+const REASONS=["Cigarette / vapoteuse","Téléphone","Pied qui mord le cercle","Pied hors du cercle","Sort du cercle avant que la boule touche le sol","Partie du corps qui touche le sol","But mal placé après un jet infructueux de l'adversaire","Balayage devant une boule à tirer","Lance une de ses boules pendant une partie","Mesure avec les pieds","Joueur sort de la partie sans l'autorisation d'un arbitre","Temps de jeu dépassé","Comportement antisportif","Insultes / langage","Contestation de l'arbitre","Alcool","Boules non conformes","Autre"];
 const COL={V:["Verbal","dV","cV"],Y:["Jaune","dY","cY"],O:["Orange","dO","cO"],R:["Rouge","dR","cR"]};
-const fresh=()=>({info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[],dc:[],dt:[]});
+const fresh=()=>({info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[],dc:[],dt:[],pen:[]});
 let S=fresh();
 let tab="concours",q="";
-const norm=()=>{S.dc=S.dc||[];S.dt=S.dt||[];S.teams.forEach(t=>{if(!t.partie)t.partie=S.partie||1});S.cards.forEach(c=>{if(c.col==="R"&&!c.sc)c.sc="C";if(!c.partie)c.partie=1})};
+const norm=()=>{S.dc=S.dc||[];S.dt=S.dt||[];S.pen=S.pen||[];S.teams.forEach(t=>{if(!t.partie)t.partie=S.partie||1});S.cards.forEach(c=>{if(c.col==="R"&&!c.sc)c.sc="C";if(!c.partie)c.partie=1})};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 norm();
 const $=id=>document.getElementById(id);
@@ -107,7 +107,8 @@ function merge(a,b){
   const dc=[...new Set([...(a.dc||[]),...(b.dc||[])])],dt=[...new Set([...(a.dt||[]),...(b.dt||[])])];
   const T={};[...(b.teams||[]),...(a.teams||[])].forEach(t=>{if(dt.includes(t.id))return;const o=T[t.id];if(!o||(t.r||0)>=(o.r||0))T[t.id]=t});
   const C={};[...(b.cards||[]),...(a.cards||[])].forEach(c=>{if(!dc.includes(c.id)&&!dt.includes(c.team))C[c.id]=c});
-  return{info:n.info,state:n.state,start:n.start,end:n.end,partie:n.partie,
+  const P={};[...(b.pen||[]),...(a.pen||[])].forEach(x=>{if(!dc.includes(x.id)&&!dt.includes(x.team))P[x.id]=x});
+  return{info:n.info,state:n.state,start:n.start,end:n.end,partie:n.partie,pen:Object.values(P).sort((x,y)=>x.t-y.t||(x.id<y.id?-1:1)),
     teams:Object.values(T).sort((x,y)=>x.num-y.num||(x.id<y.id?-1:1)),
     cards:Object.values(C).sort((x,y)=>x.t-y.t||(x.id<y.id?-1:1)),
     dc,dt,rev:Math.max(a.rev||0,b.rev||0)};
@@ -150,7 +151,9 @@ const tm=id=>S.teams.find(t=>t.id===id);
 const isC=c=>c.col==="R"&&c.sc==="C";
 const act=(c,t)=>isC(c)||c.partie===t.partie;
 const disqC=id=>S.cards.some(c=>c.team===id&&isC(c));
-const disqP=t=>S.cards.some(c=>c.team===t.id&&c.col==="R"&&c.sc==="P"&&c.partie===t.partie);
+const disqP=t=>S.cards.some(c=>c.team===t.id&&c.col==="R"&&c.sc==="P"&&c.partie===t.partie)||S.pen.some(p=>p.team===t.id&&p.disq&&p.partie===t.partie);
+const lateTag=t=>{const n=S.pen.filter(p=>p.team===t.id&&p.partie===t.partie&&!p.disq).reduce((a,p)=>a+p.pts,0);return n?`<span class="tag" style="background:var(--v);color:#fff">⏱ Retard : adversaire +${n}</span>`:""};
+const penList=(del=true)=>{const a=S.pen.filter(p=>tm(p.team)).slice().reverse();return a.length?`<div class="scroll"><table>${a.map(p=>{const t=tm(p.team),o=tm(p.opp);return`<tr><td><span class="dot ${p.disq?"dR":"dV"}">${p.disq?"DQ":"+"+p.pts}</span></td><td>#${t.num} ${esc(t.name)}<div class="mu">Retard ${esc(p.lbl)} · Partie ${p.partie} — ${p.disq?"disqualification de la partie":`${p.pts} point${p.pts>1?"s":""} pour l'adversaire`}${o?` (#${o.num} ${esc(o.name)})`:""}</div></td><td class="mu">${fmt(p.t)}</td>${del&&S.state!=="done"?`<td><button data-dp="${p.id}">✕</button></td>`:""}</tr>`}).join("")}</table></div>`:'<p class="mu">Aucun retard.</p>'};
 const badge=t=>disqC(t.id)?'<span class="tag rd">🚫 Disqualifiée du concours</span>':disqP(t)?`<span class="tag rd">🚫 Disqualifiée partie ${t.partie}</span>`:"";
 const cnt=f=>{const r={V:0,Y:0,O:0,R:0};S.cards.forEach(c=>{if(f(c))r[c.col]++});return r};
 const dots=c=>["V","Y","O","R"].filter(k=>c[k]).map(k=>`<span class="dot ${COL[k][1]}">${c[k]}</span>`).join("");
@@ -208,8 +211,9 @@ function vCards(){
   const l=S.teams.filter(t=>match(t,q));
   return`<div class="box"><div class="mu">Chaque équipe a sa propre partie : touchez « → P2 » quand elle a fini sa partie (les autres arbitres le voient aussitôt). 🗣 🟨 🟧 et 🟥 « partie » ne valent que pour la partie de l'équipe · 🟥 « concours » exclut l'équipe pour tout le concours.</div></div>
   <div class="box"><input id="q" placeholder="Chercher l'équipe ou le joueur (n°, nom)…" value="${esc(q)}" autofocus><div style="margin-top:6px">${
-  l.slice(0,25).map(t=>`<div class="tm" data-c="${t.id}"><div style="flex:1;min-width:0"><b>#${t.num}</b> ${esc(t.name)} <span class="pp">Partie ${t.partie}</span> ${badge(t)}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><div>${dots(cnt(c=>c.team===t.id&&act(c,t)))}</div><button class="pb" data-np="${t.id}">→ P${t.partie+1}</button></div>`).join("")||'<p class="mu">Aucune équipe trouvée.</p>'}</div></div>
-  <div class="box"><b>Derniers cartons</b>${list(S.cards.slice(-5).reverse())}</div>`}
+  l.slice(0,25).map(t=>`<div class="tm" data-c="${t.id}"><div style="flex:1;min-width:0"><b>#${t.num}</b> ${esc(t.name)} <span class="pp">Partie ${t.partie}</span> ${badge(t)}${lateTag(t)}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><div>${dots(cnt(c=>c.team===t.id&&act(c,t)))}</div><button class="pb" data-np="${t.id}">→ P${t.partie+1}</button></div>`).join("")||'<p class="mu">Aucune équipe trouvée.</p>'}</div></div>
+  <div class="box"><b>Derniers cartons</b>${list(S.cards.slice(-5).reverse())}</div>
+  <div class="box"><b>Retards</b>${penList()}</div>`}
 
 function list(a,del=true){return a.length?`<div class="scroll"><table>${a.map(c=>`<tr><td><span class="dot ${COL[c.col][1]}">${dl(c)}</span></td><td>${esc(who(c))}<div class="mu">${esc(c.why)}${c.note?" — "+esc(c.note):""} · ${lab(c)}</div></td><td class="mu">${fmt(c.t)}</td>${del&&S.state!=="done"?`<td><button data-d="${c.id}">✕</button></td>`:""}</tr>`).join("")}</table></div>`:'<p class="mu">Aucun carton.</p>'}
 
@@ -225,6 +229,7 @@ function vRecap(){
   <div class="stats">${st(c.V,"Verbal","V")}${st(c.Y,"Jaune","Y")}${st(c.O,"Orange","O")}${st(rp,"Rouge partie","R")}${st(rc,"Rouge concours","R")}</div><p><b>${S.cards.length}</b> sanction(s) · <b>${ts.length}</b> équipe(s) sanctionnée(s) sur ${S.teams.length}</p></div>
   <div class="box"><b>Disqualifications</b><p class="mu" style="margin:8px 0 4px">Du concours</p><p style="margin:0">${dC.length?dC.map(t=>`<span class="tag rd">#${t.num} ${esc(t.name)}</span>`).join(" "):'<span class="mu">Aucune</span>'}</p>
   <p class="mu" style="margin:10px 0 4px">D'une partie</p><p style="margin:0">${dP.length?dP.map(x=>{const t=tm(x.team);return`<span class="tag rd">#${t.num} ${esc(t.name)} (partie ${x.partie||1})</span>`}).join(" "):'<span class="mu">Aucune</span>'}</p></div>
+  <div class="box"><b>Retards (points de pénalité)</b>${penList(false)}</div>
   <div class="box"><b>Par partie</b><div class="scroll"><table><tr><th>Partie</th><th>🗣 Verbal</th><th>🟨</th><th>🟧</th><th>🟥 Partie</th><th>🟥 Concours</th></tr>${parties.map(pn=>{const cc=cnt(x=>(x.partie||1)===pn),k=S.cards.filter(x=>(x.partie||1)===pn&&isC(x)).length;return`<tr><td>${pn}</td><td>${cc.V}</td><td>${cc.Y}</td><td>${cc.O}</td><td>${cc.R-k}</td><td>${k}</td></tr>`}).join("")||'<tr><td colspan="6" class="mu">Aucun carton.</td></tr>'}</table></div></div>
   <div class="box"><b>Par motif</b><p>${Object.entries(rs).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="tag">${esc(k)} : ${v}</span> `).join("")||'<span class="mu">—</span>'}</p></div>
   <div class="box"><b>Par équipe</b><div class="scroll"><table>${ts.map(t=>{const cc=cnt(x=>x.team===t.id);return`<tr><td><b>#${t.num}</b> ${esc(t.name)} <span class="mu">(partie ${t.partie})</span>${disqC(t.id)?' 🚫':""}</td><td>${dots(cc)}</td></tr><tr><td colspan="2" class="mu">${S.cards.filter(x=>x.team===t.id).map(x=>`${COL[x.col][0]} — ${esc(x.p>=0?pl(t,x.p):"équipe")} — ${esc(x.why)} — ${lab(x)}`).join("<br>")}</td></tr>`}).join("")||"<tr><td>Aucun carton.</td></tr>"}</table></div></div>
@@ -232,8 +237,8 @@ function vRecap(){
   <div class="noprint row"><button class="pri" onclick="print()">🖨 Imprimer / PDF</button></div>`}
 
 function replaceAll(d){
-  const ids=new Set(d.teams.map(t=>t.id)),cs=new Set((d.cards||[]).map(c=>c.id));
-  const dt=S.teams.filter(t=>!ids.has(t.id)).map(t=>t.id),dc=S.cards.filter(c=>!cs.has(c.id)).map(c=>c.id);
+  const ids=new Set(d.teams.map(t=>t.id)),cs=new Set([...(d.cards||[]),...(d.pen||[])].map(c=>c.id));
+  const dt=S.teams.filter(t=>!ids.has(t.id)).map(t=>t.id),dc=[...S.cards,...S.pen].filter(c=>!cs.has(c.id)).map(c=>c.id);
   S=Object.assign(fresh(),d);S.dt=[...(S.dt||[]),...dt];S.dc=[...(S.dc||[]),...dc];norm();
 }
 function bind(){
@@ -243,6 +248,7 @@ function bind(){
   document.querySelectorAll("[data-c]").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-np]"))return;cardForm(el.dataset.c)});
   document.querySelectorAll("[data-np]").forEach(el=>el.onclick=()=>{const t=tm(el.dataset.np);if(!t)return;
     if(confirm(`Équipe #${t.num} ${t.name||""} : passer à la partie ${t.partie+1} ?\n\nSes avertissements et cartons de la partie ${t.partie} seront remis à zéro (l'historique est conservé dans le récap). Un carton rouge « concours » reste actif.`)){t.partie++;t.r=Date.now();save();render()}});
+  document.querySelectorAll("[data-dp]").forEach(el=>el.onclick=()=>{if(confirm("Supprimer ce retard ?")){S.dc.push(el.dataset.dp);S.pen=S.pen.filter(p=>p.id!==el.dataset.dp);save();render()}});
   document.querySelectorAll("[data-d]").forEach(el=>el.onclick=()=>{if(confirm("Supprimer ce carton ?")){S.dc.push(el.dataset.d);S.cards=S.cards.filter(c=>c.id!==el.dataset.d);save();render()}});
   if($("addB"))$("addB").onclick=()=>{
     $("bulk").value.split("\n").map(x=>x.trim()).filter(Boolean).forEach(x=>{const p=x.split(/[;\t]/).map(s=>s.trim());S.teams.push(newTeam(p[0],p.slice(1,4)))});save();render()};
@@ -263,13 +269,14 @@ function editTeam(id){const t=tm(id);
   <div class="row" style="margin-top:14px"><button class="pri" id="ok">Enregistrer</button><button id="no">Annuler</button><span class="spacer"></span><button class="dan" id="del">Supprimer</button></div>`);
   $("no").onclick=close;
   $("ok").onclick=()=>{const t=tm(id);if(t){t.name=$("en").value.trim();t.players=[...document.querySelectorAll(".ep")].map(x=>x.value.trim());t.partie=Math.max(1,parseInt($("epa").value)||1);t.r=Date.now();save()}close();render()};
-  $("del").onclick=()=>{if(confirm("Supprimer l'équipe et ses cartons ?")){S.dt.push(id);S.teams=S.teams.filter(x=>x.id!==id);S.cards=S.cards.filter(c=>c.team!==id);save();close();render()}};
+  $("del").onclick=()=>{if(confirm("Supprimer l'équipe et ses cartons ?")){S.dt.push(id);S.teams=S.teams.filter(x=>x.id!==id);S.cards=S.cards.filter(c=>c.team!==id);S.pen=S.pen.filter(p=>p.team!==id);save();close();render()}};
 }
 
 function cardForm(id){let t=tm(id),p=-1,col=null,why=null,sc=null;
   const prev=S.cards.filter(c=>c.team===id);
   modal(`<h3>#${t.num} ${esc(t.name)} <span class="mu">· Partie ${t.partie}</span></h3>
   ${badge(t)?`<p style="color:var(--r);font-weight:700">⚠ ${disqC(id)?"Cette équipe est déjà disqualifiée du concours.":"Cette équipe est déjà disqualifiée pour cette partie."}</p>`:""}
+  <button id="toLate" style="width:100%;margin-top:6px">⏱ Enregistrer un retard (points de pénalité)</button>
   <label>Qui reçoit la sanction ?</label><div class="chips" id="pl">${[...t.players.map((n,i)=>[i,pl(t,i)]),[-1,"Toute l'équipe"]].map(([i,n])=>`<button data-p="${i}" class="${i===-1?"on":""}">${esc(n)}</button>`).join("")}</div>
   <div id="pnw" class="hide"><label>Nom ou signalement du joueur (facultatif, retenu pour la suite)</label><input id="pn" placeholder="ex : casquette rouge, grand, polo bleu"></div>
   <label>Sanction</label><div class="cols" id="co">${["V","Y","O","R"].map(k=>`<button class="${COL[k][2]}" data-k="${k}">${k==="V"?"🗣 ":""}${COL[k][0]}</button>`).join("")}</div>
@@ -282,6 +289,7 @@ function cardForm(id){let t=tm(id),p=-1,col=null,why=null,sc=null;
   const sel=(box,el)=>{box.querySelectorAll("button").forEach(b=>b.classList.remove(box.id==="co"?"sel":"on"));el.classList.add(box.id==="co"?"sel":"on")};
   $("pl").onclick=e=>{if(e.target.dataset.p!==undefined){p=+e.target.dataset.p;sel($("pl"),e.target);$("pnw").classList.toggle("hide",p<0);if(p>=0)$("pn").value=t.players[p]||""}};
   $("co").onclick=e=>{if(e.target.dataset.k){col=e.target.dataset.k;sel($("co"),e.target);$("scw").classList.toggle("hide",col!=="R")}};
+  $("toLate").onclick=()=>{close();lateForm(id)};
   $("scp").onclick=e=>{if(e.target.dataset.s){sc=e.target.dataset.s;sel($("scp"),e.target)}};
   $("rs").onclick=e=>{if(e.target.dataset.r){why=e.target.dataset.r;sel($("rs"),e.target);$("oth").classList.toggle("hide",why!=="Autre")}};
   $("no").onclick=close;
@@ -294,6 +302,20 @@ function cardForm(id){let t=tm(id),p=-1,col=null,why=null,sc=null;
     if(p>=0){const v=$("pn").value.trim();if(v!==(t2.players[p]||"")){t2.players[p]=v;t2.r=Date.now()}}
     S.cards.push({id:uid("c"),team:id,p,col,sc:col==="R"?sc:null,why:w,note:$("nt").value.trim(),t:Date.now(),partie:t2.partie});
     save();close();q="";render()};
+}
+function lateForm(id){const t=tm(id);let k=null;
+  const T=[["15–20 min","1 point pour l'adversaire",1,0],["20–25 min","2 points pour l'adversaire",2,0],["25–30 min","3 points pour l'adversaire",3,0],["+ de 30 min","Disqualification de la partie",0,1]];
+  modal(`<h3>⏱ Retard · #${t.num} ${esc(t.name)} <span class="mu">· Partie ${t.partie}</span></h3>
+  <p class="mu">Moins de 15 min de retard : aucune pénalité.</p>
+  <label>Durée du retard</label><div class="chips" id="lt">${T.map((x,i)=>`<button data-l="${i}" style="border-radius:16px;text-align:left"><b>${x[0]}</b><br><span class="mu">${x[1]}</span></button>`).join("")}</div>
+  <label>Équipe adverse (facultatif)</label><select id="op"><option value="">—</option>${S.teams.filter(x=>x.id!==id).map(x=>`<option value="${x.id}">#${x.num} ${esc(x.name)}</option>`).join("")}</select>
+  <div class="row" style="margin-top:14px"><button class="pri" id="ok">Valider le retard</button><button id="no">Annuler</button></div>`);
+  $("lt").onclick=e=>{const b=e.target.closest("button");if(b){k=+b.dataset.l;$("lt").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on")}};
+  $("no").onclick=close;
+  $("ok").onclick=()=>{if(k===null)return alert("Choisissez la durée du retard.");
+    const t2=tm(id);if(!t2){close();return}
+    S.pen.push({id:uid("p"),team:id,opp:$("op").value||"",partie:t2.partie,lbl:T[k][0],pts:T[k][2],disq:!!T[k][3],t:Date.now()});
+    save();close();render()};
 }
 connect();render();
 if(!CODE)askCode();
