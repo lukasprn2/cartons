@@ -129,7 +129,8 @@ const tm=id=>S.teams.find(t=>t.id===id);
 const cnt=(f)=>({Y:S.cards.filter(c=>c.col==="Y"&&f(c)).length,O:S.cards.filter(c=>c.col==="O"&&f(c)).length,R:S.cards.filter(c=>c.col==="R"&&f(c)).length});
 const dots=c=>["Y","O","R"].filter(k=>c[k]).map(k=>`<span class="dot ${COL[k][1]}">${c[k]}</span>`).join("");
 const fmt=t=>t?new Date(t).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
-const who=c=>{const t=tm(c.team);if(!t)return"?";const p=c.p>=0?t.players[c.p]||"Joueur "+(c.p+1):"Toute l'équipe";return`#${t.num} ${t.name||""} — ${p}`};
+const pl=(t,i)=>t.players[i]?`J${i+1} · ${t.players[i]}`:`Joueur ${i+1}`;
+const who=c=>{const t=tm(c.team);if(!t)return"?";const p=c.p>=0?pl(t,c.p):"Toute l'équipe";return`#${t.num} ${t.name||""} — ${p}`};
 
 function head(){
   $("bCode").textContent=sync==="ok"?"☁ Synchronisé":sync==="err"?"⚠ Synchro impossible":sync==="wait"?"☁ Connexion…":"☁ Définir le code";
@@ -168,7 +169,7 @@ function vTeams(){
   <textarea id="bulk" rows="4" placeholder="Les Boulistes; Paul; Marc; Luc"></textarea>
   <div class="row" style="margin-top:8px"><button class="pri" id="addB">Ajouter</button><button id="gen">Créer équipes vides 1 à 128</button></div></div>
   <div class="box"><input id="q" placeholder="Rechercher (n°, équipe, joueur)" value="${esc(q)}"><div style="margin-top:6px">${
-  l.slice(0,60).map(t=>`<div class="tm" data-e="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)||'<i class="mu">sans nom</i>'}<div class="mu">${t.players.map(esc).join(" · ")}</div></div><span>✎</span></div>`).join("")||'<p class="mu">Aucune équipe.</p>'}
+  l.slice(0,60).map(t=>`<div class="tm" data-e="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)||'<i class="mu">sans nom</i>'}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><span>✎</span></div>`).join("")||'<p class="mu">Aucune équipe.</p>'}
   ${l.length>60?`<p class="mu">${l.length-60} autres… affinez la recherche.</p>`:""}</div></div>`}
 
 const match=(t,s)=>!s||(`${t.num} ${t.name} ${t.players.join(" ")}`).toLowerCase().includes(s.toLowerCase());
@@ -177,7 +178,7 @@ function vCards(){
   if(S.state!=="run")return`<div class="box"><p>${S.state==="done"?"Le concours est terminé. Rouvrez-le pour ajouter des cartons.":"Cliquez sur « Commencer le concours » pour donner des cartons."}</p></div>`;
   const l=S.teams.filter(t=>match(t,q));
   return`<div class="box"><input id="q" placeholder="Chercher l'équipe ou le joueur (n°, nom)…" value="${esc(q)}" autofocus><div style="margin-top:6px">${
-  l.slice(0,25).map(t=>`<div class="tm" data-c="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)}<div class="mu">${t.players.map(esc).join(" · ")}</div></div><div>${dots(cnt(c=>c.team===t.id))}</div></div>`).join("")||'<p class="mu">Aucune équipe trouvée.</p>'}</div></div>
+  l.slice(0,25).map(t=>`<div class="tm" data-c="${t.id}"><div><b>#${t.num}</b> ${esc(t.name)}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><div>${dots(cnt(c=>c.team===t.id))}</div></div>`).join("")||'<p class="mu">Aucune équipe trouvée.</p>'}</div></div>
   <div class="box"><b>Derniers cartons</b>${list(S.cards.slice(-5).reverse())}</div>`}
 
 function list(a,del=true){return a.length?`<div class="scroll"><table>${a.map(c=>`<tr><td><span class="dot ${COL[c.col][1]}">${COL[c.col][0][0]}</span></td><td>${esc(who(c))}<div class="mu">${esc(c.why)}${c.note?" — "+esc(c.note):""}</div></td><td class="mu">${fmt(c.t)}</td>${del&&S.state!=="done"?`<td><button data-d="${c.id}">✕</button></td>`:""}</tr>`).join("")}</table></div>`:'<p class="mu">Aucun carton.</p>'}
@@ -189,7 +190,7 @@ function vRecap(){
   return`<div class="box"><h3>${esc(S.info.nom||"Concours")}</h3><p class="mu">${[S.info.date,S.info.lieu,S.info.type,S.info.arbitre&&"Arbitre : "+S.info.arbitre].filter(Boolean).map(esc).join(" · ")}<br>Début : ${fmt(S.start)||"—"} · Fin : ${fmt(S.end)||"en cours"}</p>
   <div class="cols">${st("Y")}${st("O")}${st("R")}</div><p><b>${S.cards.length}</b> carton(s) · <b>${ts.length}</b> équipe(s) sanctionnée(s) sur ${S.teams.length}</p></div>
   <div class="box"><b>Par motif</b><p>${Object.entries(rs).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="tag">${esc(k)} : ${v}</span> `).join("")||'<span class="mu">—</span>'}</p></div>
-  <div class="box"><b>Par équipe</b><div class="scroll"><table>${ts.map(t=>{const cc=cnt(x=>x.team===t.id);return`<tr><td><b>#${t.num}</b> ${esc(t.name)}</td><td>${dots(cc)}</td></tr><tr><td colspan="2" class="mu">${S.cards.filter(x=>x.team===t.id).map(x=>`${COL[x.col][0]} — ${esc(x.p>=0?t.players[x.p]||"J"+(x.p+1):"équipe")} — ${esc(x.why)}`).join("<br>")}</td></tr>`}).join("")||"<tr><td>Aucun carton.</td></tr>"}</table></div></div>
+  <div class="box"><b>Par équipe</b><div class="scroll"><table>${ts.map(t=>{const cc=cnt(x=>x.team===t.id);return`<tr><td><b>#${t.num}</b> ${esc(t.name)}</td><td>${dots(cc)}</td></tr><tr><td colspan="2" class="mu">${S.cards.filter(x=>x.team===t.id).map(x=>`${COL[x.col][0]} — ${esc(x.p>=0?pl(t,x.p):"équipe")} — ${esc(x.why)}`).join("<br>")}</td></tr>`}).join("")||"<tr><td>Aucun carton.</td></tr>"}</table></div></div>
   <div class="box"><b>Chronologie</b>${list(S.cards.slice().reverse(),false)}</div>
   <div class="noprint row"><button class="pri" onclick="print()">🖨 Imprimer / PDF</button></div>`}
 
@@ -213,7 +214,7 @@ function modal(h){const m=$("modal");m.innerHTML=`<div>${h}</div>`;m.classList.r
 function close(){$("modal").classList.add("hide")}
 
 function editTeam(id){const t=tm(id);
-  modal(`<h3>Équipe #${t.num}</h3><label>Nom d'équipe</label><input id="en" value="${esc(t.name)}">${[0,1,2].map(i=>`<label>Joueur ${i+1}</label><input class="ep" value="${esc(t.players[i])}">`).join("")}
+  modal(`<h3>Équipe #${t.num}</h3><label>Nom d'équipe</label><input id="en" value="${esc(t.name)}">${[0,1,2].map(i=>`<label>Joueur ${i+1} (nom ou signalement)</label><input class="ep" placeholder="ex : casquette rouge" value="${esc(t.players[i])}">`).join("")}
   <div class="row" style="margin-top:14px"><button class="pri" id="ok">Enregistrer</button><button id="no">Annuler</button><span class="spacer"></span><button class="dan" id="del">Supprimer</button></div>`);
   $("no").onclick=close;
   $("ok").onclick=()=>{t.name=$("en").value.trim();t.players=[...document.querySelectorAll(".ep")].map(x=>x.value.trim());save();close();render()};
@@ -223,7 +224,8 @@ function editTeam(id){const t=tm(id);
 function cardForm(id){const t=tm(id);let p=-1,col=null,why=null;
   const prev=S.cards.filter(c=>c.team===id);
   modal(`<h3>#${t.num} ${esc(t.name)}</h3>
-  <label>Qui reçoit le carton ?</label><div class="chips" id="pl">${[...t.players.map((n,i)=>[i,n||"Joueur "+(i+1)]),[-1,"Toute l'équipe"]].map(([i,n])=>`<button data-p="${i}" class="${i===-1?"on":""}">${esc(n)}</button>`).join("")}</div>
+  <label>Qui reçoit le carton ?</label><div class="chips" id="pl">${[...t.players.map((n,i)=>[i,pl(t,i)]),[-1,"Toute l'équipe"]].map(([i,n])=>`<button data-p="${i}" class="${i===-1?"on":""}">${esc(n)}</button>`).join("")}</div>
+  <div id="pnw" class="hide"><label>Nom ou signalement du joueur (facultatif, retenu pour la suite)</label><input id="pn" placeholder="ex : casquette rouge, grand, polo bleu"></div>
   <label>Couleur</label><div class="cols" id="co">${["Y","O","R"].map(k=>`<button class="${COL[k][2]}" data-k="${k}">${COL[k][0]}</button>`).join("")}</div>
   <label>Motif</label><div class="chips" id="rs">${REASONS.map(r=>`<button data-r="${esc(r)}">${esc(r)}</button>`).join("")}</div>
   <input id="oth" class="hide" placeholder="Précisez le motif" style="margin-top:8px">
@@ -231,7 +233,7 @@ function cardForm(id){const t=tm(id);let p=-1,col=null,why=null;
   ${prev.length?`<label>Déjà sanctionné</label>${list(prev,false)}`:""}
   <div class="row" style="margin-top:14px"><button class="pri" id="ok">Valider le carton</button><button id="no">Annuler</button></div>`);
   const sel=(box,attr,el)=>{box.querySelectorAll("button").forEach(b=>b.classList.remove(box.id==="co"?"sel":"on"));el.classList.add(box.id==="co"?"sel":"on")};
-  $("pl").onclick=e=>{if(e.target.dataset.p!==undefined){p=+e.target.dataset.p;sel($("pl"),0,e.target)}};
+  $("pl").onclick=e=>{if(e.target.dataset.p!==undefined){p=+e.target.dataset.p;sel($("pl"),0,e.target);$("pnw").classList.toggle("hide",p<0);if(p>=0)$("pn").value=t.players[p]||""}};
   $("co").onclick=e=>{if(e.target.dataset.k){col=e.target.dataset.k;sel($("co"),0,e.target)}};
   $("rs").onclick=e=>{if(e.target.dataset.r){why=e.target.dataset.r;sel($("rs"),0,e.target);$("oth").classList.toggle("hide",why!=="Autre")}};
   $("no").onclick=close;
@@ -239,6 +241,7 @@ function cardForm(id){const t=tm(id);let p=-1,col=null,why=null;
     if(!col)return alert("Choisissez la couleur.");
     if(!why)return alert("Choisissez le motif.");
     let w=why;if(why==="Autre"){w=$("oth").value.trim();if(!w)return alert("Précisez le motif.")}
+    if(p>=0){const v=$("pn").value.trim();if(v!==(t.players[p]||""))t.players[p]=v}
     S.cards.push({id:"c"+Date.now().toString(36),team:id,p,col,why:w,note:$("nt").value.trim(),t:Date.now()});
     save();close();q="";render()};
 }
