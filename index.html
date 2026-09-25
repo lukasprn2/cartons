@@ -88,7 +88,9 @@ th{color:var(--mu);font-size:12px;font-weight:600;text-transform:uppercase;lette
 const KEY="cartons_petanque_v1";
 const REASONS=["Cigarette / vapoteuse","Téléphone","Pied qui mord le cercle","Pied hors du cercle","Sort du cercle avant que la boule touche le sol","Partie du corps qui touche le sol","But mal placé après un jet infructueux de l'adversaire","Balayage devant une boule à tirer","Lance une de ses boules pendant une partie","Mesure avec les pieds","Joueur sort de la partie sans l'autorisation d'un arbitre","Temps de jeu dépassé","Comportement antisportif","Insultes / langage","Contestation de l'arbitre","Alcool","Boules non conformes","Autre"];
 const COL={V:["Verbal","dV","cV"],Y:["Jaune","dY","cY"],O:["Orange","dO","cO"],R:["Rouge","dR","cR"]};
-const fresh=()=>({info:{nom:"",date:"",lieu:"",type:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[],dc:[],dt:[],pen:[]});
+const fresh=()=>({info:{nom:"",date:"",lieu:"",format:"triple",niveau:"",arbitre:"",notes:""},state:"prep",start:null,end:null,teams:[],cards:[],dc:[],dt:[],pen:[]});
+const TENUE={dept:"Tenue sportive",reg:"Haut homogène (couleur/modèle identique) + bas sportif"};
+const numPlayers=()=>({tete:1,double:2,triple:3}[S.info.format]||3);
 let S=fresh();
 let tab="concours",q="",lastAdded=null,liveTimer=null;
 const norm=()=>{S.dc=S.dc||[];S.dt=S.dt||[];S.pen=S.pen||[];S.teams.forEach(t=>{if(!t.partie)t.partie=S.partie||1});S.cards.forEach(c=>{if(c.col==="R"&&!c.sc)c.sc="C";if(!c.partie)c.partie=1})};
@@ -206,8 +208,21 @@ function render(){head();const m=$("main");
 }
 
 function vInfo(){const i=S.info;const f=(k,l,t="text")=>`<div><label>${l}</label><input type="${t}" data-i="${k}" value="${esc(i[k])}"></div>`;
-  return`<div class="box"><h3>Renseignements du concours</h3><div class="grid">${f("nom","Nom du concours")}${f("date","Date","date")}${f("lieu","Lieu")}${f("type","Type (triplette, mêlée…)")}${f("arbitre","Arbitre principal")}</div>
+  const niv=i.niveau==="reg"?"reg":i.niveau==="dept"?"dept":"";
+  return`<div class="box"><h3>Renseignements du concours</h3><div class="grid">${f("nom","Nom du concours")}${f("date","Date","date")}${f("lieu","Lieu")}
+  <div><label>Format</label><select data-i="format">
+    <option value="tete" ${i.format==="tete"?"selected":""}>Tête-à-tête (1 joueur/équipe)</option>
+    <option value="double" ${i.format==="double"?"selected":""}>Doublette (2 joueurs/équipe)</option>
+    <option value="triple" ${i.format==="triple"||!i.format?"selected":""}>Triplette (3 joueurs/équipe)</option>
+  </select></div>
+  <div><label>Niveau</label><select data-i="niveau">
+    <option value="" ${!niv?"selected":""}>— À choisir —</option>
+    <option value="dept" ${niv==="dept"?"selected":""}>Départemental</option>
+    <option value="reg" ${niv==="reg"?"selected":""}>Régional</option>
+  </select></div>
+  ${f("arbitre","Arbitre principal")}</div>
   <label>Notes</label><textarea data-i="notes" rows="3">${esc(i.notes)}</textarea></div>
+  <div class="box" style="background:var(--acS)"><h3>👕 Tenue exigée</h3>${niv?`<p style="margin:0;font-weight:600">${niv==="reg"?"Régional":"Départemental"} : ${esc(TENUE[niv])}</p>`:'<p class="mu" style="margin:0">Choisissez le niveau du concours ci-dessus pour afficher la tenue exigée.</p>'}</div>
   <div class="box"><h3>Votre profil</h3><p class="mu">Votre nom est enregistré avec chaque sanction que vous donnez, utile quand plusieurs arbitres partagent le même concours.</p><div class="row"><button id="editRef">👤 ${REF?"Modifier : "+esc(REF):"Définir mon nom"}</button></div></div>
   <div class="box"><h3>Sauvegarde</h3><p class="mu">Les données sont enregistrées automatiquement dans ce navigateur (gratuit, aucun compte). Utilisez toujours le même appareil et navigateur. Exportez régulièrement une copie de secours.</p>
   <div class="row"><button id="exp">Exporter la sauvegarde</button><button id="imp">Importer</button><span class="spacer"></span><button class="dan" id="rst">Tout effacer</button></div>
@@ -220,8 +235,10 @@ function vTeams(){
   const elimCount=S.teams.filter(t=>disqC(t.id)||disqP(t)).length;
   return`<div class="box"><h3>Ajouter des équipes</h3>
   <p class="mu">Une équipe par ligne : <i>Joueur 1; Joueur 2; Joueur 3</i>. Le numéro est attribué automatiquement.</p>
-  <textarea id="bulk" rows="4" placeholder="Paul; Marc; Luc"></textarea>
-  <div class="row" style="margin-top:8px"><button class="pri" id="addB">Ajouter</button><button id="gen">Créer équipes vides 1 à 128</button></div></div>
+  <textarea id="bulk" rows="4" placeholder="${numPlayers()===1?"Paul":numPlayers()===2?"Paul; Marc":"Paul; Marc; Luc"}"></textarea>
+  <div class="row" style="margin-top:8px"><button class="pri" id="addB">Ajouter</button></div>
+  <label>Ou créer des équipes vides</label>
+  <div class="row"><input id="nbEq" type="number" min="1" max="500" placeholder="Nombre d'équipes" style="max-width:170px"><button id="gen">Créer</button></div></div>
   <div class="box"><input id="q" placeholder="Rechercher (n°, joueur)" value="${esc(q)}">
   <div class="row" style="margin-top:8px"><button class="dan" id="delElim" ${elimCount?"":"disabled"}>🗑 Supprimer les équipes éliminées${elimCount?" ("+elimCount+")":""}</button></div>
   <div style="margin-top:6px">${
@@ -231,7 +248,8 @@ function vTeams(){
 function vCards(){
   if(S.state!=="run")return`<div class="box"><p>${S.state==="done"?"Le concours est terminé. Rouvrez-le pour ajouter des cartons.":"Cliquez sur « Commencer le concours » pour donner des cartons."}</p></div>`;
   const l=S.teams.filter(t=>match(t,q));
-  return`<div class="box"><div class="mu">Chaque équipe a sa propre partie : touchez « → P2 » quand elle a fini sa partie (les autres arbitres le voient aussitôt). 🗣 🟨 🟧 et 🟥 « partie » ne valent que pour la partie de l'équipe · 🟥 « concours » exclut l'équipe pour tout le concours.</div></div>
+  return`<div class="box"><div class="mu">Chaque équipe a sa propre partie : touchez « → P2 » quand elle a fini sa partie (les autres arbitres le voient aussitôt). 🗣 🟨 🟧 et 🟥 « partie » ne valent que pour la partie de l'équipe · 🟥 « concours » exclut l'équipe pour tout le concours.</div>
+  ${S.info.niveau?`<div class="mu" style="margin-top:8px">👕 Tenue (${S.info.niveau==="reg"?"régional":"départemental"}) : ${esc(TENUE[S.info.niveau])}</div>`:""}</div>
   ${lastValid()?`<div class="box row" style="justify-content:space-between;align-items:center"><div><b>Dernière action</b><div class="mu">${esc(lastAdded.desc)}</div></div><button class="dan" id="undoBtn">↺ Annuler</button></div>`:""}
   <div class="box"><input id="q" placeholder="Chercher l'équipe ou le joueur (n°, nom)…" value="${esc(q)}" autofocus><div style="margin-top:6px">${
   l.slice(0,25).map(t=>`<div class="tm" data-c="${t.id}"><div style="flex:1;min-width:0"><b>#${t.num}</b> <span class="pp">Partie ${t.partie}</span> ${badge(t)}${lateTag(t)}<div class="mu">${t.players.map((n,i)=>esc(n||"J"+(i+1))).join(" · ")}</div></div><div>${dots(cnt(c=>c.team===t.id&&act(c,t)))}</div><button class="pb" data-np="${t.id}">→ P${t.partie+1}</button></div>`).join("")||'<p class="mu">Aucune équipe trouvée.</p>'}</div></div>
@@ -301,14 +319,19 @@ function bind(){
   if($("editRef"))$("editRef").onclick=askRef;
   if($("delElim"))$("delElim").onclick=deleteEliminated;
   if($("addB"))$("addB").onclick=()=>{
-    $("bulk").value.split("\n").map(x=>x.trim()).filter(Boolean).forEach(x=>{const p=x.split(/[;\t]/).map(s=>s.trim());S.teams.push(newTeam(p.slice(0,3)))});save();render()};
-  if($("gen"))$("gen").onclick=()=>{if(S.teams.length&&!confirm("Ajouter 128 équipes en plus de celles existantes ?"))return;for(let i=0;i<128;i++)S.teams.push(newTeam([]));save();render()};
+    $("bulk").value.split("\n").map(x=>x.trim()).filter(Boolean).forEach(x=>{const p=x.split(/[;\t]/).map(s=>s.trim());S.teams.push(newTeam(p))});save();render()};
+  if($("gen"))$("gen").onclick=()=>{
+    const n=parseInt($("nbEq")?.value)||0;
+    if(!n||n<1)return alert("Indiquez d'abord le nombre d'équipes à créer.");
+    if(S.teams.length&&!confirm(`Ajouter ${n} équipe(s) vide(s) en plus de celles existantes ?`))return;
+    for(let i=0;i<n;i++)S.teams.push(newTeam([]));save();render();
+  };
   if($("exp"))$("exp").onclick=()=>{$("bk").classList.remove("hide");$("bk").value=JSON.stringify(S);$("bk").select()};
   if($("imp"))$("imp").onclick=()=>{const b=$("bk");if(b.classList.contains("hide")){b.classList.remove("hide");b.value="";return}
     try{const d=JSON.parse(b.value);if(!d.teams)throw 0;if(confirm("Remplacer toutes les données actuelles ?")){replaceAll(d);save();render()}}catch(e){alert("Sauvegarde invalide.")}};
   if($("rst"))$("rst").onclick=()=>{if(confirm("Effacer TOUTES les données (équipes, cartons, infos) ?")&&confirm("Vraiment ? C'est définitif.")){replaceAll(fresh());lastAdded=null;save();tab="concours";render()}};
 }
-function newTeam(p){const num=S.teams.reduce((m,t)=>Math.max(m,t.num),0)+1;return{id:uid("t")+num,num,players:[p[0]||"",p[1]||"",p[2]||""],partie:1,r:Date.now()}}
+function newTeam(p){const num=S.teams.reduce((m,t)=>Math.max(m,t.num),0)+1;const n=numPlayers();const players=[];for(let k=0;k<n;k++)players.push(p[k]||"");return{id:uid("t")+num,num,players,partie:1,r:Date.now()}}
 
 function quickDelete(id){
   const t=tm(id);if(!t)return;
@@ -331,8 +354,8 @@ function deleteEliminated(){
 function modal(h){const m=$("modal");m.innerHTML=`<div>${h}</div>`;m.classList.remove("hide");m.onclick=e=>{if(e.target===m)close()}}
 function close(){$("modal").classList.add("hide")}
 
-function editTeam(id){const t=tm(id);
-  modal(`<h3>Équipe #${t.num}</h3>${[0,1,2].map(i=>`<label>Joueur ${i+1} (nom ou signalement)</label><input class="ep" placeholder="ex : casquette rouge" value="${esc(t.players[i])}">`).join("")}
+function editTeam(id){const t=tm(id);const nb=Math.max(t.players.length,numPlayers());
+  modal(`<h3>Équipe #${t.num}</h3>${Array.from({length:nb},(_,i)=>i).map(i=>`<label>Joueur ${i+1} (nom ou signalement)</label><input class="ep" placeholder="ex : casquette rouge" value="${esc(t.players[i]||"")}">`).join("")}
   <label>Partie en cours de l'équipe</label><input id="epa" type="number" min="1" value="${t.partie}">
   <div class="row" style="margin-top:14px"><button class="pri" id="ok">Enregistrer</button><button id="no">Annuler</button><span class="spacer"></span><button class="dan" id="del">Supprimer</button></div>`);
   $("no").onclick=close;
