@@ -18,8 +18,8 @@ header small{display:block;color:var(--mu);font-weight:500;font-size:12.5px;marg
 #bStart,#bEnd{width:100%;order:3;padding:14px;font-size:16px;font-weight:700;border-radius:16px;letter-spacing:.2px}
 main{padding:6px 16px calc(100px + env(safe-area-inset-bottom,0px));max-width:720px;margin:0 auto}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:6}
-nav button{flex:1;border:0;background:none;border-radius:12px;padding:7px 2px;font-size:11.5px;color:var(--mu);display:flex;flex-direction:column;align-items:center;gap:3px;min-height:0;font-weight:500}
-nav button i{font-style:normal;font-size:21px;line-height:1}
+nav button{flex:1;border:0;background:none;border-radius:12px;padding:7px 2px;font-size:11px;color:var(--mu);display:flex;flex-direction:column;align-items:center;gap:3px;min-height:0;font-weight:500}
+nav button i{font-style:normal;font-size:20px;line-height:1}
 nav button.on{color:var(--ac);font-weight:700;background:var(--acS)}
 nav button *{pointer-events:none}
 button{font:inherit;border:0;background:var(--bd);color:var(--tx);border-radius:13px;padding:11px 16px;min-height:46px;cursor:pointer;font-weight:500}
@@ -66,6 +66,9 @@ th{color:var(--mu);font-size:12px;font-weight:600;text-transform:uppercase;lette
 .tag{font-size:11.5px;padding:4px 10px;border-radius:20px;background:var(--bd);color:var(--mu);display:inline-block;margin:0 5px 5px 0;font-weight:600}
 .rd{background:var(--rS);color:var(--r)}
 .pp,.rt{font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:20px;background:var(--acS);color:var(--ac);white-space:nowrap}
+.rcard{border-top:1px solid var(--bd);padding:12px 0}
+.rcard:first-child{border-top:0}
+.rcard h4{margin:0 0 4px;font-size:15px}
 @media (min-width:700px){.grid{grid-template-columns:1fr 1fr;gap:0 14px}.modal{align-items:center}.modal>div{border-radius:20px}}
 @media print{header,nav,.noprint{display:none!important}body{background:#fff;color:#000}.box{border:1px solid #ccc}}
 </style>
@@ -92,12 +95,62 @@ const fresh=()=>({info:{nom:"",date:"",lieu:"",format:"triple",niveau:"",arbitre
 const TENUE={dept:"Tenue sportive",reg:"Haut homogène (couleur/modèle identique) + bas sportif"};
 const numPlayers=()=>({tete:1,double:2,triple:3}[S.info.format]||3);
 let S=fresh();
-let tab="concours",q="",lastAdded=null,liveTimer=null;
+let tab="concours",q="",rq="",lastAdded=null,liveTimer=null;
 const norm=()=>{S.dc=S.dc||[];S.dt=S.dt||[];S.pen=S.pen||[];S.teams.forEach(t=>{if(!t.partie)t.partie=S.partie||1});S.cards.forEach(c=>{if(c.col==="R"&&!c.sc)c.sc="C";if(!c.partie)c.partie=1})};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 norm();
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---- Aide-mémoire du règlement (hors ligne, gratuit) ---- */
+const RULES=[
+ {id:"formation",title:"Formation des équipes",tags:["triplette","doublette","tete a tete","joueurs","format","boules par joueur"],a:"La pétanque oppose des triplettes (3 joueurs par équipe, 2 boules chacun), des doublettes (2 joueurs, 3 boules chacun) ou des parties en tête-à-tête (1 joueur, 3 boules chacun). Aucune autre formule n'est autorisée (Art. 1)."},
+ {id:"boules_agreees",title:"Caractéristiques des boules",tags:["boules","metal","diametre","poids","agreees"],a:"Les boules de compétition doivent être en métal, homologuées FIPJP, d'un diamètre compris entre 7,05 et 8 cm et d'un poids entre 650 et 800 g. Les jeunes de 11 ans et moins peuvent utiliser des boules de 600 g et 65 mm si elles sont d'un label homologué. Le label du fabricant et le poids doivent être gravés et rester lisibles (Art. 2)."},
+ {id:"boules_non_conformes",title:"Sanction pour boules non conformes",tags:["boules truquees","sanction boules","triche boules"],a:"Un joueur dont les boules sont truquées ou modifiées (plomb, sable, recuisson, etc.) est immédiatement exclu de la compétition avec son ou ses partenaires. Une boule simplement usagée ou défectueuse, sans tricherie, doit seulement être changée, à condition que la réclamation soit faite avant le début de la partie (ou entre deux mènes en cas de suspicion de triche) (Art. 2 bis)."},
+ {id:"but_agree",title:"Caractéristiques du but",tags:["but","cochonnet","diametre","poids du but"],a:"Le but doit être en bois ou en matière synthétique homologuée, d'un diamètre de 30 mm (tolérance 1 mm) et d'un poids compris entre 10 et 18 g. Il ne doit pas pouvoir être ramassé avec un aimant (Art. 3)."},
+ {id:"licence",title:"Licence obligatoire",tags:["licence","ffpjp","inscription","qr code"],a:"Pour s'inscrire à une compétition, chaque joueur doit présenter sa licence (aujourd'hui un QR code). Si un joueur se présente sans son QR code mais avec une pièce d'identité, il peut participer si la compétition est gérée par l'application fédérale et que sa qualité de licencié y apparaît ; une amende de 10 € s'applique alors après vérification (Règlement de jeu, Art. 4 ; Règlement administratif et sportif, Art. 3)."},
+ {id:"terrain_points",title:"Terrain et points d'une partie",tags:["terrain","dimensions","cadre","points","13 points","treize"],a:"Pour les compétitions nationales, un terrain délimité mesure au minimum 15 m sur 4 m ; pour les autres concours, les fédérations peuvent descendre jusqu'à 12 m sur 3 m. Une partie se joue en 13 points, avec possibilité de jouer les poules ou le cadrage en 11 points (Art. 5)."},
+ {id:"cercle",title:"Le cercle et les pieds",tags:["cercle","pied","pieds","mordre","sortir du cercle"],a:"Le cercle de lancement mesure entre 35 et 50 cm de diamètre, tracé ou posé à plus d'1 m de tout obstacle et à au moins 1,50 m d'un autre cercle ou but utilisé. Les pieds des joueurs doivent rester entièrement à l'intérieur, sans mordre sur le cercle, jusqu'à ce que la boule lancée ait touché le sol ; aucune autre partie du corps ne doit toucher le sol à l'extérieur du cercle (Art. 6)."},
+ {id:"lancer_but_distance",title:"Distances pour lancer le but",tags:["but","distance","lancer","6 metres","10 metres"],a:"Pour les juniors et seniors, le but doit être lancé à une distance comprise entre 6 et 10 m du bord intérieur du cercle. Il doit aussi être à au moins 50 cm de tout obstacle et de la ligne de fond, à 1,50 m d'un autre but ou cercle utilisé, et visible du joueur placé dans le cercle, le corps droit (Art. 7)."},
+ {id:"but_nul",title:"Quand le but est-il nul ?",tags:["but nul","annulation but"],a:"Le but est nul notamment s'il est déplacé en terrain interdit, s'il n'est plus visible du cercle, s'il se retrouve à plus de 20 m ou à moins de 3 m du cercle, s'il est introuvable après 5 minutes de recherche, ou si un terrain interdit se trouve entre le but et le cercle (Art. 9)."},
+ {id:"obstacles",title:"Déplacer un obstacle ou une donnée",tags:["donnee","obstacle","tater","balayage"],a:"Il est interdit de supprimer, déplacer ou écraser un obstacle du terrain. Le joueur qui s'apprête à lancer le but peut tâter une donnée avec une boule, sans frapper plus de trois fois le sol. Un balayage devant une boule à tirer est sanctionnable (Art. 10)."},
+ {id:"changement_but_boule",title:"Changer de but ou de boule",tags:["changer boule","boule cassee","but introuvable"],a:"Changer de but ou de boule en cours de partie n'est autorisé que si l'objet est introuvable (recherche limitée à 5 minutes) ou s'il se casse ; en cas de casse, le plus gros morceau compte jusqu'au remplacement (Art. 11)."},
+ {id:"boule_nulle_terrain",title:"Boule en terrain interdit",tags:["boule nulle","terrain interdit"],a:"Toute boule est nulle dès qu'elle passe entièrement en terrain interdit ; une boule à cheval sur la limite reste bonne. Une boule nulle doit être retirée immédiatement, sinon elle est considérée comme bonne dès que l'adversaire a joué (Art. 19)."},
+ {id:"boule_arretee_volontairement",title:"Arrêter une boule volontairement",tags:["arreter boule","disqualification immediate"],a:"Un joueur qui arrête volontairement une boule en mouvement est immédiatement disqualifié pour la partie en cours, ainsi que son équipe (Art. 20)."},
+ {id:"temps_jeu",title:"Temps pour jouer sa boule",tags:["temps","minute","chronometre","jouer"],a:"Un joueur dispose d'une minute maximum pour lancer sa boule, délai qui court dès l'arrêt du but ou de la boule précédente, ou après une mesure. La même minute s'applique au lancer du but (Art. 21)."},
+ {id:"mauvaise_boule",title:"Jouer la boule d'un autre joueur",tags:["mauvaise boule","boule d'un autre"],a:"Jouer la boule d'un autre joueur entraîne un avertissement ; la boule doit être immédiatement remplacée. En cas de récidive dans la même partie, la boule jouée est annulée et tout ce qu'elle a déplacé est remis en place (Art. 23)."},
+ {id:"mesure",title:"Qui mesure les points ?",tags:["mesure","mesurer","litige","points","decametre"],a:"La mesure d'un point se fait avec un instrument approprié, jamais avec les pieds. Les joueurs doivent rester à au moins 2 m de l'arbitre pendant qu'il mesure, et sa décision est alors sans appel (Art. 26)."},
+ {id:"reclamation",title:"Faire une réclamation",tags:["reclamation","contestation formelle"],a:"Toute réclamation doit être adressée à un arbitre. Une fois la partie terminée, aucune réclamation n'est plus recevable (Art. 31)."},
+ {id:"retard",title:"Retard ou absence d'une équipe",tags:["retard","en retard","penalite","absence","30 minutes"],a:"Un quart d'heure après l'annonce des résultats du tirage au sort, l'équipe absente est pénalisée d'un point, puis d'un point supplémentaire par tranche de 5 minutes de retard. Une équipe toujours absente 30 minutes après le début ou la reprise des parties est éliminée de la compétition (Art. 32)."},
+ {id:"retardataire",title:"Joueur retardataire",tags:["retardataire","mene","participer"],a:"Un joueur arrivant après le début d'une mène n'y participe pas ; il est admis à partir de la mène suivante. Passé 30 minutes après le début de la partie, il perd le droit d'y participer, mais peut rejoindre son équipe à la partie suivante si elle est qualifiée et nominativement inscrite (Art. 33)."},
+ {id:"sortie_terrain",title:"Quitter le terrain",tags:["sortie","quitter","absence joueur"],a:"Un joueur ne peut quitter le terrain sans l'autorisation d'un arbitre. Son absence n'interrompt pas la partie : ses partenaires doivent continuer à jouer dans la minute impartie, et s'il n'est pas revenu pour jouer ses boules, celles-ci sont annulées à raison d'une par minute (Art. 32)."},
+ {id:"remplacement",title:"Remplacer un joueur",tags:["remplacement","changement de joueur"],a:"Remplacer un joueur en doublette, ou un ou deux joueurs en triplette, n'est autorisé qu'avant l'annonce officielle du début de la compétition, et seulement si le remplaçant n'est pas déjà inscrit avec une autre équipe (Art. 34)."},
+ {id:"echelle",title:"Les sanctions de l'article 35",tags:["carton","sanction","ordre","echelle","gradation"],a:"L'article 35 prévoit, par ordre : l'avertissement (carton jaune), l'annulation de la boule jouée ou à jouer (carton orange), l'exclusion du joueur pour la partie (carton rouge), la disqualification de l'équipe fautive, et la disqualification des deux équipes en cas de connivence. Un avertissement ne peut être donné qu'après constatation d'une infraction, jamais à titre préventif."},
+ {id:"verbal",title:"Avertissement verbal",tags:["verbal","avertissement","rappel"],a:"Le règlement appelle « avertissement » ce que matérialise le carton jaune : il ne peut être donné qu'après une infraction constatée. Un simple rappel oral avant ce carton est une pratique courante de certains arbitres, mais ce n'est pas une sanction définie en tant que telle par le règlement."},
+ {id:"jaune",title:"Carton jaune",tags:["jaune","carton jaune"],a:"Le carton jaune marque un avertissement officiel. S'il sanctionne un dépassement de temps, il est donné à toute l'équipe ; si un joueur a déjà un carton jaune, il perd une boule pour la mène en cours ou la suivante (Art. 35)."},
+ {id:"orange",title:"Carton orange",tags:["orange","carton orange"],a:"Le carton orange annule officiellement la boule que le joueur vient de jouer, ou celle qu'il s'apprête à jouer (Art. 35)."},
+ {id:"rouge",title:"Carton rouge",tags:["rouge","carton rouge","exclusion","disqualification"],a:"Le carton rouge exclut le joueur fautif de la partie en cours. Selon la gravité, l'équipe entière peut aussi être disqualifiée, voire les deux équipes en cas de connivence (Art. 35)."},
+ {id:"intemperies",title:"Intempéries",tags:["pluie","intemperies","arret partie"],a:"En cas de fortes intempéries, toute mène déjà commencée doit être terminée, sauf décision contraire de l'arbitre, seul habilité à arrêter les parties après consultation du jury ou du comité d'organisation (Art. 36)."},
+ {id:"contestation",title:"Contester une décision d'arbitre",tags:["contestation","contester","discussion arbitre"],a:"Les décisions d'un arbitre sur le terrain ne peuvent être contestées auprès du jury que si elles concernent l'interprétation du règlement, et seulement si la partie n'a pas repris depuis. Un comportement irrespectueux envers l'arbitre est lui-même une faute sanctionnable (Art. 27, Règlement administratif)."},
+ {id:"jury_role",title:"Rôle du jury de concours",tags:["jury","pouvoirs jury","decisions jury"],a:"Le jury de concours (3 à 4 membres) veille au bon déroulement matériel et sportif de la compétition et peut sanctionner un comportement en dehors d'une partie (avertissement, exclusion définitive). Il n'intervient pas sur une décision arbitrale prise pendant une partie ; ses décisions sont sans appel (Art. 7, Règlement administratif)."},
+ {id:"tenue",title:"Tenue vestimentaire obligatoire",tags:["tenue","vetement","habits","maillot","chaussures"],a:"Une tenue correcte est obligatoire : chaussures entièrement fermées, pas de torse nu, pas de débardeur, legging, robe, jupe, jean ni pantalon de ville — le bas doit être sportif (short ou survêtement). Pour les compétitions qui l'exigent, le haut de toute l'équipe doit être homogène en couleur et en conception. L'arbitre statue sur la conformité des chaussures ; pour le reste de la tenue, la disqualification relève du jury (Règlement administratif, Art. 22 et Annexe VII)."},
+ {id:"cigarette_telephone",title:"Cigarette et téléphone",tags:["cigarette","vapoteuse","telephone","fumer","portable"],a:"Fumer sur les terrains, y compris la cigarette électronique, est interdit, de même que l'usage du téléphone portable pendant les parties. Un joueur qui persiste après avertissement d'un arbitre peut être exclu de la compétition (Art. 39)."},
+ {id:"alcool",title:"Contrôle d'alcoolémie",tags:["alcool","ivresse","controle alcool"],a:"Un contrôle est considéré positif à partir de 0,25 mg par litre d'air expiré (environ 0,50 g/l de sang), et 0,00 pour les officiels et éducateurs. En cas de premier contrôle positif, un second contrôle a lieu 20 à 30 minutes après ; une nouvelle positivité entraîne l'exclusion définitive de la compétition (Règlement administratif, Art. 40)."},
+ {id:"probleme_medical",title:"Problème médical en cours de partie",tags:["blessure","medical","soins","malaise"],a:"En cas de problème médical en cours de partie, celle-ci est arrêtée au maximum 15 minutes pour les soins. Si le joueur ne peut reprendre à l'issue de ce délai, il est écarté du reste de la compétition sauf avis médical contraire ; ses partenaires peuvent continuer sans ses boules, ou abandonner (Règlement administratif, Art. 23)."},
+ {id:"coaching",title:"Coaching pendant la partie",tags:["coaching","coach","conseiller","accompagnateur"],a:"Un éducateur diplômé habilité comme coach peut intervenir verbalement auprès de son équipe pendant la minute de jeu autorisée, depuis sa chaise. Ce rôle est réservé aux titulaires d'un brevet fédéral désignés à cet effet, pas à n'importe quel accompagnateur (Règlement administratif, Art. 32 et 36)."},
+ {id:"droit_retrait",title:"Droit de retrait de l'arbitre",tags:["droit de retrait","agression","menace arbitre"],a:"Un arbitre victime d'une agression physique ou de menaces graves peut faire valoir son droit de retrait auprès du jury, qui doit alors prononcer l'arrêt définitif du concours et transmettre un rapport détaillé à l'organe compétent (Règlement administratif, Art. 28)."}
+];
+const STOP=new Set(["le","la","les","un","une","des","de","du","en","sur","pour","avec","est","que","qui","quoi","comment","quand","ou","combien","ce","cette","cet","ces","mon","ma","mes","son","sa","ses","au","aux","a","dans","par","d","l","qu","se","sont","on","je","tu","il","elle","nous","vous","ils","elles","et","si","pas","ne","n","c","j","peut","doit","faut"]);
+const stripA=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g," ");
+const toks=s=>stripA(s).split(/\s+/).filter(w=>w.length>1&&!STOP.has(w));
+RULES.forEach(r=>{r._idx=stripA(r.title+" "+r.tags.join(" ")+" "+r.a);r._ti=stripA(r.title)});
+function searchRules(query){
+  const qt=toks(query);if(!qt.length)return[];
+  return RULES.map(r=>{let s=0;qt.forEach(t=>{if(r._ti.includes(t))s+=3;else if(r._idx.includes(t))s+=1;if(r.tags.some(g=>stripA(g).includes(t)))s+=2});return{r,s}})
+    .filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5).map(x=>x.r);
+}
+const SUGG=["cercle","retard","carton rouge","mesure","tenue","alcool"];
+
 const FIREBASE_CONFIG={apiKey:"AIzaSyAqBObvy03KeZWZxDjRVd-GmDHUmAKMQws",authDomain:"cartons-19847.firebaseapp.com",projectId:"cartons-19847",storageBucket:"cartons-19847.firebasestorage.app",messagingSenderId:"179473290623",appId:"1:179473290623:web:321ce823ae8e22d63a764a"};
 const CKEY="cartons_code",RKEY="cartons_ref";let CODE="",REF="",ref=null,unsub=null,sync="local",tmr=null;
 try{CODE=localStorage.getItem(CKEY)||"";REF=localStorage.getItem(RKEY)||""}catch(e){}
@@ -188,7 +241,7 @@ function head(){
   $("bStart").classList.toggle("hide",S.state==="run");
   $("bStart").textContent=S.state==="done"?"↺ Rouvrir le concours":"▶ Commencer le concours";
   $("bEnd").classList.toggle("hide",S.state!=="run");
-  $("nav").innerHTML=[["concours","⚙️","Concours"],["equipes","👥","Équipes"],["cartons","🟨","Carton"],["suivi","👁","Suivi"],["recap","📋","Récap"]]
+  $("nav").innerHTML=[["concours","⚙️","Concours"],["equipes","👥","Équipes"],["cartons","🟨","Carton"],["suivi","👁","Suivi"],["regles","🎓","Règles"],["recap","📋","Récap"]]
     .map(([k,i,l])=>`<button class="${tab===k?"on":""}" data-t="${k}"><i>${i}</i>${l}</button>`).join("");
 }
 $("nav").onclick=e=>{const t=e.target.closest("button")?.dataset.t;if(t){tab=t;q="";render()}};
@@ -201,7 +254,7 @@ $("bStart").onclick=()=>{
 $("bEnd").onclick=()=>{if(confirm("Terminer le concours et afficher le récapitulatif ?")){S.state="done";S.end=Date.now();save();tab="recap";render()}};
 
 function render(){head();const m=$("main");
-  m.innerHTML=tab==="concours"?vInfo():tab==="equipes"?vTeams():tab==="cartons"?vCards():tab==="suivi"?vSuivi():vRecap();
+  m.innerHTML=tab==="concours"?vInfo():tab==="equipes"?vTeams():tab==="cartons"?vCards():tab==="suivi"?vSuivi():tab==="regles"?vRegles():vRecap();
   bind();
   clearInterval(liveTimer);
   if(tab==="suivi")liveTimer=setInterval(()=>{if(tab==="suivi")render()},60000);
@@ -272,6 +325,17 @@ function vSuivi(){
     return`<tr><td><b>#${t.num}</b></td><td><span class="pp">P${t.partie}</span></td><td>${badge(t)||recentRet(t)?`${badge(t)}${recentRet(t)?'<span class="rt">⏱ retard récent</span>':""}`:'<span class="mu">—</span>'}</td><td class="mu">${la?ago(la):"aucune"}</td></tr>`}).join("")||'<tr><td colspan="4" class="mu">Aucune équipe.</td></tr>'}</table></div>
   ${sorted.length>80?`<p class="mu">${sorted.length-80} autres… affinez la recherche.</p>`:""}</div>`}
 
+function vRegles(){
+  const res=searchRules(rq);
+  return`<div class="box"><h3>🎓 Aide-mémoire du règlement</h3><p class="mu">Assistant hors ligne, gratuit, basé sur le règlement officiel FIPJP du sport de Pétanque et le règlement administratif et sportif FFPJP (version 2026). Reformulé pour être clair et rapide à lire ; en cas de doute, le texte officiel de la FFPJP fait foi et la décision finale revient à l'arbitre en chef ou au jury.</p>
+  <input id="rq" placeholder="Posez votre question (ex : cercle, retard, carton rouge…)" value="${esc(rq)}" autofocus>
+  <div class="chips" style="margin-top:10px">${SUGG.map(s=>`<button data-sg="${esc(s)}">${esc(s)}</button>`).join("")}</div></div>
+  <div class="box">${
+    !rq.trim()?'<p class="mu">Tapez un mot-clé ci-dessus, ou touchez une suggestion.</p>'
+    :res.length?res.map(r=>`<div class="rcard"><h4>${esc(r.title)}</h4><p style="margin:0">${esc(r.a)}</p></div>`).join("")
+    :'<p class="mu">Aucune réponse trouvée pour cette recherche. Essayez un autre mot-clé, ou vérifiez auprès de l\u2019arbitre en chef / du règlement officiel FFPJP.</p>'
+  }</div>`}
+
 function list(a,del=true){return a.length?`<div class="scroll"><table>${a.map(c=>`<tr><td><span class="dot ${COL[c.col][1]}">${dl(c)}</span></td><td>${esc(who(c))}<div class="mu">${esc(c.why)}${c.note?" — "+esc(c.note):""} · ${lab(c)}${c.by?" · Arbitre : "+esc(c.by):""}</div></td><td class="mu">${fmt(c.t)}</td>${del&&S.state!=="done"?`<td><button data-d="${c.id}">✕</button></td>`:""}</tr>`).join("")}</table></div>`:'<p class="mu">Aucun carton.</p>'}
 
 function vRecap(){
@@ -308,6 +372,8 @@ function undo(){
 function bind(){
   document.querySelectorAll("[data-i]").forEach(el=>el.oninput=()=>{S.info[el.dataset.i]=el.value;save();head()});
   const qi=$("q");if(qi)qi.oninput=()=>{q=qi.value;const p=qi.selectionStart;render();const n=$("q");n.focus();n.setSelectionRange(p,p)};
+  const rqi=$("rq");if(rqi)rqi.oninput=()=>{rq=rqi.value;const p=rqi.selectionStart;render();const n=$("rq");n.focus();n.setSelectionRange(p,p)};
+  document.querySelectorAll("[data-sg]").forEach(el=>el.onclick=()=>{rq=el.dataset.sg;render()});
   document.querySelectorAll("[data-e]").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-qd]"))return;editTeam(el.dataset.e)});
   document.querySelectorAll("[data-qd]").forEach(el=>el.onclick=e=>{e.stopPropagation();quickDelete(el.dataset.qd)});
   document.querySelectorAll("[data-c]").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-np]"))return;cardForm(el.dataset.c)});
